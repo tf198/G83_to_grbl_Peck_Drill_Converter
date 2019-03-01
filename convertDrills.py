@@ -5,31 +5,23 @@ Created on Sun Nov 13 12:54:25 2016
 @author: DTalaiver
 
 This script converts G83 instructions to grbl accepted G-code.
+
+Modified by Tris Forster for command line usage
 """
 
 #drill parser
 
-import Tkinter as tk
-import tkFileDialog 
 
-root = tk.Tk()
-root.withdraw()
-root.deiconify()
-root.lift()
-root.focus_force()
-root.withdraw()
-file_path = tkFileDialog.askopenfilename(parent=root)
+def g83_to_grbl(src, dst, retractFeed=20, clearHeight=0.25):
 
-outfile = open(file_path[:-3]+'4grbl.nc', 'w')
-retractFeed = 'F20'
-clearHeight = '0.25'
-with open(file_path) as f:
-    for line in f:
-        content = line
+    for line in src:
+        content = line.strip()
         elements = content.split(" ")
         if elements[0] != "G83": #if its not G83 just pass it out
-            outfile.write(content)
+            dst.write(content)
+            dst.write('\n')
         else:
+            dst.write(f';{content}\n')
             #extract elements from command
             for q in range(0,len(elements)):
                 if "X" in elements[q]:
@@ -46,22 +38,44 @@ with open(file_path) as f:
                     plunge = elements[q]
             #begin pecking
             #go to position
-            outfile.write('G0'+xCmd+yCmd+"\n")
+            dst.write(f'G0{xCmd}{yCmd}\n')
             curDepth=0
-            outfile.write('G0Z0'+"\n")
+            dst.write(f'G0Z0\n')
             while (curDepth>bottom):
                 curDepth=curDepth-increment
                 if curDepth<=bottom:
                     curDepth=bottom
                 #plunge
-                outfile.write('G1'+'Z'+str(curDepth)+plunge)
+                dst.write(f'G1Z{curDepth}{plunge}\n')
                 #retract
-                outfile.write('G1'+'Z'+retract+retractFeed+"\n")
+                dst.write(f'G1Z{retract}F{retractFeed}\n')
             #pecking done
-            outfile.write('G0Z'+clearHeight+"\n")
+            dst.write(f'G0Z{clearHeight}\n')
            
-                
-        
+                    
+if __name__ == '__main__':
+
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="Convert G83 commands to GRBL")
+    parser.add_argument('source',
+            help="Source file")
+    parser.add_argument('--outfile', '-o', default=None,
+            help="Write to this file")
+    parser.add_argument('--retract', '-r', type=float, default=20,
+            help="Retract feed rate")
+    parser.add_argument('--clearance', '-c', type=float, default=0.25,
+            help="Clearance height")
+    options = parser.parse_args()
 
 
-outfile.close()
+    dest = sys.stdout
+
+    if options.outfile:
+        dest = open(options.outfile, 'w')
+
+    with open(options.source) as f:
+        g83_to_grbl(f, dest, options.retract, options.clearance)
+
+    dest.close
